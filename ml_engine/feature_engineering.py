@@ -35,19 +35,28 @@ def aggregate_provider_features(claims_bene, top100_diag, top100_proc):
     diag_cols_feat = [f"Diag_{c}" for c in top100_diag]
     proc_cols_feat = [f"Proc_{c}" for c in top100_proc]
 
+    available_columns = set(claims_bene.columns)
     agg_dict = {
         "ClaimID": "count",
         "InscClaimAmtReimbursed": ["sum", "mean", "max"],
         "DeductibleAmtPaid": ["sum", "mean"],
-        "ReimbRatio": "mean",
-        "ClaimDuration": ["mean", "max"],
-        "DaysInHospital": ["mean", "sum"],
-        "Age": "mean",
-        "ChronicCondCount": "mean",
-        "SameAttendOper": "sum",
-        "IsDead": "sum",
-        "ClaimType": lambda x: (x == "Inpatient").sum(),
     }
+    if "ReimbRatio" in available_columns:
+        agg_dict["ReimbRatio"] = "mean"
+    if "ClaimDuration" in available_columns:
+        agg_dict["ClaimDuration"] = ["mean", "max"]
+    if "DaysInHospital" in available_columns:
+        agg_dict["DaysInHospital"] = ["mean", "sum"]
+    if "Age" in available_columns:
+        agg_dict["Age"] = "mean"
+    if "ChronicCondCount" in available_columns:
+        agg_dict["ChronicCondCount"] = "mean"
+    if "SameAttendOper" in available_columns:
+        agg_dict["SameAttendOper"] = "sum"
+    if "IsDead" in available_columns:
+        agg_dict["IsDead"] = "sum"
+    if "ClaimType" in available_columns:
+        agg_dict["ClaimType"] = lambda x: (x == "Inpatient").sum()
 
     provider_df = claims_bene.groupby("Provider").agg(agg_dict)
     provider_df.columns = [
@@ -57,24 +66,36 @@ def aggregate_provider_features(claims_bene, top100_diag, top100_proc):
     ]
     provider_df = provider_df.reset_index()
 
-    provider_df = provider_df.rename(columns={
+    rename_columns = {
         "ClaimID_count": "TotalClaims",
         "InscClaimAmtReimbursed_sum": "TotalReimbursed",
         "InscClaimAmtReimbursed_mean": "AvgReimbursed",
         "InscClaimAmtReimbursed_max": "MaxReimbursed",
         "DeductibleAmtPaid_sum": "TotalDeductible",
         "DeductibleAmtPaid_mean": "AvgDeductible",
-        "ReimbRatio_mean": "AvgReimbRatio",
-        "ClaimDuration_mean": "AvgClaimDuration",
-        "ClaimDuration_max": "MaxClaimDuration",
-        "DaysInHospital_mean": "AvgDaysInHospital",
-        "DaysInHospital_sum": "TotalDaysInHospital",
-        "Age_mean": "AvgPatientAge",
-        "ChronicCondCount_mean": "AvgChronicConds",
-        "SameAttendOper_sum": "SameAttendOperCount",
-        "IsDead_sum": "DeceasedPatientCount",
-        "ClaimType_<lambda>": "InpatientClaimCount",
-    })
+    }
+    if "ReimbRatio_mean" in provider_df.columns:
+        rename_columns["ReimbRatio_mean"] = "AvgReimbRatio"
+    if "ClaimDuration_mean" in provider_df.columns:
+        rename_columns["ClaimDuration_mean"] = "AvgClaimDuration"
+    if "ClaimDuration_max" in provider_df.columns:
+        rename_columns["ClaimDuration_max"] = "MaxClaimDuration"
+    if "DaysInHospital_mean" in provider_df.columns:
+        rename_columns["DaysInHospital_mean"] = "AvgDaysInHospital"
+    if "DaysInHospital_sum" in provider_df.columns:
+        rename_columns["DaysInHospital_sum"] = "TotalDaysInHospital"
+    if "Age_mean" in provider_df.columns:
+        rename_columns["Age_mean"] = "AvgPatientAge"
+    if "ChronicCondCount_mean" in provider_df.columns:
+        rename_columns["ChronicCondCount_mean"] = "AvgChronicConds"
+    if "SameAttendOper_sum" in provider_df.columns:
+        rename_columns["SameAttendOper_sum"] = "SameAttendOperCount"
+    if "IsDead_sum" in provider_df.columns:
+        rename_columns["IsDead_sum"] = "DeceasedPatientCount"
+    if "ClaimType_<lambda>" in provider_df.columns:
+        rename_columns["ClaimType_<lambda>"] = "InpatientClaimCount"
+
+    provider_df = provider_df.rename(columns=rename_columns)
 
     uniq = claims_bene.groupby("Provider").agg(
         UniquePatients=("BeneID", "nunique"),
@@ -86,24 +107,29 @@ def aggregate_provider_features(claims_bene, top100_diag, top100_proc):
 
     provider_df = provider_df.merge(uniq, on="Provider", how="left")
 
-    provider_df["OutpatientClaimCount"] = (
-        provider_df["TotalClaims"] - provider_df["InpatientClaimCount"]
-    )
-    provider_df["InpatientRatio"] = (
-        provider_df["InpatientClaimCount"] / provider_df["TotalClaims"]
-    )
-    provider_df["PatientsPerClaim"] = (
-        provider_df["UniquePatients"] / provider_df["TotalClaims"]
-    )
-    provider_df["PhysiciansPerClaim"] = (
-        provider_df["UniqueAttendPhys"] / provider_df["TotalClaims"]
-    )
-    provider_df["SameAttendOperRate"] = (
-        provider_df["SameAttendOperCount"] / provider_df["TotalClaims"]
-    )
-    provider_df["DeceasedPatientRate"] = (
-        provider_df["DeceasedPatientCount"] / provider_df["UniquePatients"]
-    )
+    if "InpatientClaimCount" in provider_df.columns:
+        provider_df["OutpatientClaimCount"] = (
+            provider_df["TotalClaims"] - provider_df["InpatientClaimCount"]
+        )
+        provider_df["InpatientRatio"] = (
+            provider_df["InpatientClaimCount"] / provider_df["TotalClaims"]
+        )
+    if "UniquePatients" in provider_df.columns:
+        provider_df["PatientsPerClaim"] = (
+            provider_df["UniquePatients"] / provider_df["TotalClaims"]
+        )
+    if "UniqueAttendPhys" in provider_df.columns:
+        provider_df["PhysiciansPerClaim"] = (
+            provider_df["UniqueAttendPhys"] / provider_df["TotalClaims"]
+        )
+    if "SameAttendOperCount" in provider_df.columns:
+        provider_df["SameAttendOperRate"] = (
+            provider_df["SameAttendOperCount"] / provider_df["TotalClaims"]
+        )
+    if "DeceasedPatientCount" in provider_df.columns and "UniquePatients" in provider_df.columns:
+        provider_df["DeceasedPatientRate"] = (
+            provider_df["DeceasedPatientCount"] / provider_df["UniquePatients"]
+        )
 
     code_agg = claims_bene.groupby("Provider")[diag_cols_feat + proc_cols_feat].max()
     provider_df = provider_df.merge(code_agg.reset_index(), on="Provider", how="left")
