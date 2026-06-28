@@ -29,7 +29,7 @@ def main(argv: List[str] | None = None) -> int:
         argv = sys.argv[1:]
 
     # Load .env from current working directory (project root)
-    load_dotenv()
+    load_dotenv(override=True)
 
     api_key = os.getenv("GOOGLE_API_KEY")
     if not api_key:
