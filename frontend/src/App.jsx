@@ -1,12 +1,11 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Search, FileText, MessageSquare, LogOut, ShieldAlert } from 'lucide-react';
+import { LayoutDashboard, Search, MessageSquare, LogOut, ShieldAlert } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 
 import Dashboard from './pages/Dashboard';
-import ProviderSearch from './pages/ProviderSearch';
-import Explainability from './pages/Explainability';
+import ProviderInvestigation from './pages/ProviderInvestigation';
 import Chatbot from './pages/Chatbot';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
@@ -17,32 +16,31 @@ function MainLayout({ children }) {
 
   const navItems = [
     { path: '/', label: 'Dashboard', icon: LayoutDashboard },
-    { path: '/search', label: 'Provider Investigation', icon: Search },
-    { path: '/explain', label: 'AI Explainability', icon: FileText },
+    { path: '/investigate', label: 'Provider Investigation', icon: Search },
   ];
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
       {/* Premium Glassmorphism Sidebar */}
-      <aside className="w-72 bg-gradient-to-b from-indigo-950 to-slate-900 text-white flex flex-col shadow-2xl relative overflow-hidden">
+      <aside className="w-64 lg:w-72 bg-gradient-to-b from-indigo-950 to-slate-900 text-white flex flex-col shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 pointer-events-none"></div>
-        <div className="p-8 border-b border-indigo-800/50 relative z-10 flex items-center">
-          <ShieldAlert className="w-8 h-8 text-indigo-400 mr-3 animate-pulse" />
-          <h1 className="text-xl font-black tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 to-white">
-            FRAUDGUARD
+        <div className="p-6 lg:p-8 border-b border-indigo-800/50 relative z-10 flex items-center">
+          <ShieldAlert className="w-8 h-8 text-indigo-400 mr-3 animate-pulse shrink-0" />
+          <h1 className="text-lg lg:text-xl font-black tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 to-white leading-tight">
+            Intelligent Healthcare Fraud Detection & Investigation Platform
           </h1>
         </div>
-        <nav className="flex-1 p-6 space-y-3 relative z-10">
+        <nav className="flex-1 p-4 lg:p-6 space-y-3 relative z-10">
           {navItems.map((item) => {
             const isActive = location.pathname === item.path;
             const Icon = item.icon;
             return (
-              <Link 
+              <Link
                 key={item.path}
-                to={item.path} 
+                to={item.path}
                 className={`flex items-center p-4 rounded-xl transition-all duration-300 group ${
-                  isActive 
-                    ? 'bg-indigo-600/20 text-indigo-300 shadow-[inset_0_0_15px_rgba(79,70,229,0.2)] border border-indigo-500/30' 
+                  isActive
+                    ? 'bg-indigo-600/20 text-indigo-300 shadow-[inset_0_0_15px_rgba(79,70,229,0.2)] border border-indigo-500/30'
                     : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
                 }`}
               >
@@ -52,8 +50,8 @@ function MainLayout({ children }) {
             );
           })}
         </nav>
-        <div className="p-6 relative z-10 border-t border-indigo-800/50">
-          <button 
+        <div className="p-4 lg:p-6 relative z-10 border-t border-indigo-800/50">
+          <button
             onClick={logout}
             className="flex items-center justify-center w-full p-4 rounded-xl text-slate-300 bg-slate-800/50 hover:bg-red-500/20 hover:text-red-400 transition-all duration-300 border border-transparent hover:border-red-500/30 group"
           >
@@ -65,13 +63,13 @@ function MainLayout({ children }) {
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col overflow-hidden bg-slate-50/50 relative">
-        <header className="bg-white/80 backdrop-blur-md shadow-sm h-20 flex items-center px-10 border-b border-slate-200 z-10">
-          <h2 className="text-xl font-extrabold text-slate-800 tracking-tight">Intelligent Healthcare Fraud Detection & Investigation Platform</h2>
+        <header className="bg-white/80 backdrop-blur-md shadow-sm h-20 flex items-center px-6 lg:px-10 border-b border-slate-200 z-10">
+          <h2 className="text-lg lg:text-xl font-extrabold text-slate-800 tracking-tight">Intelligent Healthcare Fraud Detection & Investigation Platform</h2>
         </header>
-        <div className="flex-1 overflow-y-auto p-10 relative">
+        <div className="flex-1 overflow-y-auto p-6 lg:p-10 relative">
           <div className="absolute top-[-100px] right-[-100px] w-96 h-96 bg-indigo-400 rounded-full mix-blend-multiply filter blur-[128px] opacity-20 pointer-events-none"></div>
           <div className="absolute bottom-[-100px] left-[-100px] w-96 h-96 bg-teal-400 rounded-full mix-blend-multiply filter blur-[128px] opacity-20 pointer-events-none"></div>
-          
+
           <div className="relative z-10 h-full">
             {children}
           </div>
@@ -107,8 +105,7 @@ function App() {
               <MainLayout>
                 <Routes>
                   <Route path="/" element={<Dashboard />} />
-                  <Route path="/search" element={<ProviderSearch />} />
-                  <Route path="/explain" element={<Explainability />} />
+                  <Route path="/investigate" element={<ProviderInvestigation />} />
                   <Route path="/chat" element={<Chatbot />} />
                 </Routes>
               </MainLayout>

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { ShieldAlert, Mail, Lock, User, ArrowRight, Loader2 } from 'lucide-react';
+import { Mail, Lock, User, ArrowRight, Loader2 } from 'lucide-react';
 
 const Signup = () => {
   const [username, setUsername] = useState('');
@@ -69,11 +69,11 @@ const Signup = () => {
             <User className="h-8 w-8 text-white rotate-12" />
           </div>
         </div>
-        <h2 className="mt-6 text-center text-3xl font-extrabold text-slate-900 tracking-tight">
-          Create an Account
+        <h2 className="mt-6 text-center text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+          Intelligent Healthcare Fraud Detection & Investigation Platform
         </h2>
         <p className="mt-2 text-center text-sm text-slate-600">
-          Join the Intelligent Healthcare Fraud Detection & Investigation Platform
+          Create an account to access the analytics dashboard and provider investigation console
         </p>
       </div>
 

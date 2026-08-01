@@ -64,11 +64,11 @@ const Login = () => {
             <ShieldAlert className="h-8 w-8 text-white -rotate-12" />
           </div>
         </div>
-        <h2 className="mt-6 text-center text-3xl font-extrabold text-slate-900 tracking-tight">
-          Welcome Back
+        <h2 className="mt-6 text-center text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+          Intelligent Healthcare Fraud Detection & Investigation Platform
         </h2>
         <p className="mt-2 text-center text-sm text-slate-600">
-          Sign in to access the Intelligent Healthcare Fraud Detection & Investigation Platform
+          Sign in to access the analytics dashboard and provider investigation console
         </p>
       </div>
 

@@ -5,7 +5,6 @@ import {
   ShieldAlert,
   TrendingUp,
   Activity,
-  TrendingDown,
   DollarSign,
   ChevronUp,
   ChevronDown,
@@ -57,6 +56,13 @@ const Dashboard = () => {
   const claimRatioData = [
     { name: 'Inpatient Claims', value: datasetStats.inpatientClaims, color: '#3b82f6' },
     { name: 'Outpatient Claims', value: datasetStats.outpatientClaims, color: '#10b981' }
+  ];
+
+  // Fraud Score Distribution — derived from real risk-level counts using classifier thresholds
+  const fraudScoreBins = [
+    { name: '0-50', label: 'Low Risk', count: datasetStats.riskLevels.Low, color: '#10b981', pct: Math.round((datasetStats.riskLevels.Low / datasetStats.totalProviders) * 100) },
+    { name: '50-80', label: 'Medium Risk', count: datasetStats.riskLevels.Medium, color: '#f59e0b', pct: Math.round((datasetStats.riskLevels.Medium / datasetStats.totalProviders) * 100) },
+    { name: '80-100', label: 'High Risk', count: datasetStats.riskLevels.High, color: '#ef4444', pct: Math.round((datasetStats.riskLevels.High / datasetStats.totalProviders) * 100) }
   ];
 
   // Reimbursement comparison
@@ -233,6 +239,34 @@ const Dashboard = () => {
           </div>
         </div>
 
+        {/* Fraud Score Distribution */}
+        <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-md">
+          <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center">
+            <Activity className="w-5 h-5 text-indigo-500 mr-2" /> Fraud Score Distribution
+          </h3>
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={fraudScoreBins} layout="vertical" margin={{ top: 20, right: 30, left: 20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                <XAxis type="number" />
+                <YAxis type="category" dataKey="name" width={60} />
+                <Tooltip
+                  formatter={(value, name, props) => {
+                    if (name === 'count') return [`${value} Providers`, props.payload.label];
+                    return [value, name];
+                  }}
+                  labelFormatter={(label) => `Fraud Score ${label === '0-50' ? '0-50' : label === '50-80' ? '50-80' : '80-100'}`}
+                />
+                <Bar dataKey="count" radius={[0, 8, 8, 0]} barSize={40}>
+                  {fraudScoreBins.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
         {/* Inpatient vs Outpatient Claims */}
         <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-md">
           <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center">
@@ -254,6 +288,7 @@ const Dashboard = () => {
                   ))}
                 </Pie>
                 <Tooltip formatter={(value) => [value.toLocaleString(), 'Claims Count']} />
+                <Legend />
               </PieChart>
             </ResponsiveContainer>
           </div>
