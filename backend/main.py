@@ -23,24 +23,38 @@ from services.report_generation_service import ReportGenerationService
 
 # Import AI modules
 load_dotenv()
+
+# ---------------------------------------------------------------------------
+# Gemini explainability module (always importable)
+# ---------------------------------------------------------------------------
 try:
-    # Initialize explainability and RAG gemini
-    api_key = os.getenv("GEMINI_API_KEY")
-
-    if not api_key:
-        raise RuntimeError(
-            "GEMINI_API_KEY not found. Please set it in the .env file."
-        )
-
-
-    os.environ["GOOGLE_API_KEY"] = api_key
-    os.environ["GEMINI_API_KEY"] = api_key
-    
-    from rag.rag_pipeline import rag_chat
     import explainability
     explainability.configure_gemini()
+    EXPLAINABILITY_AVAILABLE = True
 except Exception as e:
-    print(f"Warning: Failed to import or configure AI modules: {e}")
+    print(f"Warning: Failed to import or configure explainability module: {e}")
+    explainability = None
+    EXPLAINABILITY_AVAILABLE = False
+
+# ---------------------------------------------------------------------------
+# RAG pipeline (optional; must not break /explain if unavailable)
+# ---------------------------------------------------------------------------
+try:
+    from rag.rag.rag_pipeline import RAGPipeline
+    rag_pipeline = RAGPipeline()
+    RAG_AVAILABLE = True
+except Exception as e:
+    print(f"Warning: Failed to import RAG pipeline: {e}")
+    rag_pipeline = None
+    RAG_AVAILABLE = False
+
+
+def rag_chat(message: str) -> str:
+    """Wrapper around the RAG pipeline for the /chat endpoint."""
+    if rag_pipeline is not None:
+        return rag_pipeline.ask(message)
+    raise RuntimeError("RAG pipeline is not available.")
+
 
 app = FastAPI(title="Fraud Investigation Platform API")
 
@@ -58,9 +72,36 @@ try:
 
 except Exception as e:
     print(f"❌ Model loading failed: {e}")
+    model = None
+    scaler = None
+    feature_names = []
 
-explainability_service = ExplainabilityService()
+# Load background data for SHAP (scaled provider features)
+background_data = None
+try:
+    provider_df = pd.read_csv(PROJECT_ROOT / "notebooks" / "provider_master.csv")
+    if feature_names and scaler is not None:
+        background_raw = provider_df[feature_names].fillna(0).values
+        background_data = scaler.transform(background_raw)
+        print(f"✅ Background data loaded: {background_data.shape[0]} samples")
+except Exception as e:
+    print(f"⚠️ Failed to load background data for SHAP: {e}")
+
+# Initialize services
+explainability_service = ExplainabilityService(
+    model=model,
+    scaler=scaler,
+    feature_names=feature_names,
+    background_data=background_data,
+)
 report_generation_service = ReportGenerationService()
+
+# Initialize SHAP explainer once at startup (reused for every request)
+shap_initialized = explainability_service.initialize_explainer()
+if shap_initialized:
+    print("✅ SHAP LinearExplainer initialized")
+else:
+    print("⚠️ SHAP explainer could not be initialized; fallback will be used")
 
 # Import and attach auth routes
 from backend.auth import router as auth_router
@@ -150,60 +191,99 @@ def explain_fraud(provider_id: str):
             else "Low"
         )
 
-        feature_importance = []
+        # ------------------------------------------------------------------
+        # Real SHAP computation
+        # ------------------------------------------------------------------
+        shap_values = explainability_service.compute_shap_values(X_scaled)
+        fallback_used = False
+        shap_error = None
 
-        for i, col in enumerate(feature_cols[:4]):
-            raw_value = float(X_input.iloc[0][col])
-            scaled_value = float(X_scaled[0][i])
-            feature_importance.append({
-                "feature": col,
-                "impact": round(abs(scaled_value) * 0.1, 3),
-                "feature_value": raw_value,
-                "baseline_value": 0.0,
-            })
+        if shap_values is not None:
+            # Rank features by absolute SHAP value (descending)
+            feature_contributions = explainability_service.rank_features(
+                feature_names=feature_cols,
+                shap_values=shap_values,
+                feature_values=[float(X_input.iloc[0][col]) for col in feature_cols],
+                baseline_values=[0.0] * len(feature_cols),
+            )
+        else:
+            # Fallback: use scaled-value heuristic if SHAP fails
+            fallback_used = True
+            shap_error = "SHAP computation failed; using fallback feature importance."
+            logger.warning("SHAP computation failed for %s; using fallback.", provider_id)
+            feature_contributions = []
+            for i, col in enumerate(feature_cols):
+                raw_value = float(X_input.iloc[0][col])
+                scaled_value = float(X_scaled[0][i])
+                feature_contributions.append({
+                    "feature_name": col,
+                    "shap_value": round(abs(scaled_value) * 0.1, 3),
+                    "feature_value": raw_value,
+                    "baseline_value": 0.0,
+                })
 
-        top_features = [f["feature"] for f in feature_importance]
+        top_features = [f["feature_name"] for f in feature_contributions]
 
-        prompt = explainability.build_prompt(
-            provider_id=provider_id,
-            prediction=risk_level,
-            probability=round(probability, 2),
-            top_features=top_features,
-            shap_values={f["feature"]: f["impact"] for f in feature_importance}
-        )
-
+        # ------------------------------------------------------------------
+        # Gemini explainability (optional; fallback if unavailable)
+        # ------------------------------------------------------------------
         explanation_fallback = False
         explanation_error = None
-        try:
-            report_text = explainability.generate_explanation(
-                prompt,
-                max_output_tokens=800
-            )
-        except Exception as exc:
+        report_text = ""
+
+        if EXPLAINABILITY_AVAILABLE and explainability is not None:
+            try:
+                prompt = explainability.build_prompt(
+                    provider_id=provider_id,
+                    prediction=risk_level,
+                    probability=round(probability, 2),
+                    top_features=top_features,
+                    shap_values={f["feature_name"]: f["shap_value"] for f in feature_contributions}
+                )
+                report_text = explainability.generate_explanation(
+                    prompt,
+                    max_output_tokens=800
+                )
+            except Exception as exc:
+                explanation_fallback = True
+                explanation_error = str(exc)
+                report_text = (
+                    "The Explainability service is temporarily unavailable. "
+                    "A grounded report was generated from the available structured inputs."
+                )
+                logger.warning("Explainability generation failed for %s: %s", provider_id, exc)
+        else:
             explanation_fallback = True
-            explanation_error = str(exc)
+            explanation_error = "Explainability module is not available."
             report_text = (
                 "The Explainability service is temporarily unavailable. "
                 "A grounded report was generated from the available structured inputs."
             )
-            logger.warning("Explainability generation failed for %s: %s", provider_id, exc)
 
+        # ------------------------------------------------------------------
+        # Build structured explanation payload
+        # ------------------------------------------------------------------
         structured_payload = explainability_service.build_explanation_payload(
             provider_id=provider_id,
             prediction=risk_level,
             probability=probability,
-            feature_contributions=[
-                {
-                    "feature_name": item["feature"],
-                    "shap_value": item["impact"],
-                    "feature_value": item.get("feature_value"),
-                    "baseline_value": item.get("baseline_value"),
-                }
-                for item in feature_importance
-            ],
+            feature_contributions=feature_contributions,
             explanation_text=report_text,
         )
 
+        # ------------------------------------------------------------------
+        # Generate SHAP plots (summary + waterfall) as base64
+        # ------------------------------------------------------------------
+        plots_payload = explainability_service.build_plot_payload(
+            explanation_payload=structured_payload,
+            shap_values=shap_values,
+            X_scaled=X_scaled,
+            feature_names=feature_cols,
+        )
+
+        # ------------------------------------------------------------------
+        # Report generation (unchanged contract)
+        # ------------------------------------------------------------------
         report_context = {
             "provider_id": provider_id,
             "fraud_prediction": {
@@ -233,9 +313,9 @@ def explain_fraud(provider_id: str):
             "risk_level": risk_level,
             "top_features": top_features,
             "shap_summary": report_text,
-            "feature_importance": feature_importance,
+            "feature_importance": feature_contributions,
             "structured_explanation": structured_payload["structured_explanation"],
-            "plots": structured_payload["plots"],
+            "plots": plots_payload,
             "report_generation": {
                 "markdown_report": generated_report["markdown_report"],
                 "structured_report": generated_report["structured_report"],
@@ -243,13 +323,14 @@ def explain_fraud(provider_id: str):
                 "explanation_error": explanation_error,
             },
             "explanation_generation": {
-                "fallback_used": explanation_fallback,
-                "error": explanation_error,
+                "fallback_used": explanation_fallback or fallback_used,
+                "error": explanation_error or shap_error,
                 "report_text": report_text,
             },
         }
 
     except Exception as e:
+        logger.exception("Explain endpoint failed for %s", provider_id)
         return {"error": str(e)}
 
 @app.post("/chat")
