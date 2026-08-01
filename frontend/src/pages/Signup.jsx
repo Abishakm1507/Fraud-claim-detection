@@ -73,7 +73,7 @@ const Signup = () => {
           Create an Account
         </h2>
         <p className="mt-2 text-center text-sm text-slate-600">
-          Join FraudGuard AI to start investigating
+          Join the Intelligent Healthcare Fraud Detection & Investigation Platform
         </p>
       </div>
 

@@ -17,9 +17,8 @@ function MainLayout({ children }) {
 
   const navItems = [
     { path: '/', label: 'Dashboard', icon: LayoutDashboard },
-    { path: '/search', label: 'Provider Search', icon: Search },
-    { path: '/explain', label: 'Explainability', icon: FileText },
-    { path: '/chat', label: 'AI Chatbot', icon: MessageSquare },
+    { path: '/search', label: 'Provider Investigation', icon: Search },
+    { path: '/explain', label: 'AI Explainability', icon: FileText },
   ];
 
   return (
@@ -29,7 +28,7 @@ function MainLayout({ children }) {
         <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 pointer-events-none"></div>
         <div className="p-8 border-b border-indigo-800/50 relative z-10 flex items-center">
           <ShieldAlert className="w-8 h-8 text-indigo-400 mr-3 animate-pulse" />
-          <h1 className="text-2xl font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 to-white">
+          <h1 className="text-xl font-black tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 to-white">
             FRAUDGUARD
           </h1>
         </div>
@@ -65,9 +64,9 @@ function MainLayout({ children }) {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col overflow-hidden bg-slate-50/50">
+      <main className="flex-1 flex flex-col overflow-hidden bg-slate-50/50 relative">
         <header className="bg-white/80 backdrop-blur-md shadow-sm h-20 flex items-center px-10 border-b border-slate-200 z-10">
-          <h2 className="text-2xl font-bold text-slate-800 tracking-tight">AI Fraud Investigation Platform</h2>
+          <h2 className="text-xl font-extrabold text-slate-800 tracking-tight">Intelligent Healthcare Fraud Detection & Investigation Platform</h2>
         </header>
         <div className="flex-1 overflow-y-auto p-10 relative">
           <div className="absolute top-[-100px] right-[-100px] w-96 h-96 bg-indigo-400 rounded-full mix-blend-multiply filter blur-[128px] opacity-20 pointer-events-none"></div>
@@ -77,6 +76,17 @@ function MainLayout({ children }) {
             {children}
           </div>
         </div>
+
+        {/* Floating Chatbot button - appears on every page EXCEPT the `/chat` route */}
+        {location.pathname !== '/chat' && (
+          <Link
+            to="/chat"
+            className="fixed bottom-6 right-6 w-14 h-14 bg-gradient-to-tr from-indigo-600 to-indigo-500 text-white rounded-full shadow-lg shadow-indigo-500/30 flex items-center justify-center hover:from-indigo-500 hover:to-indigo-400 hover:scale-110 hover:-translate-y-0.5 transition-all z-50 duration-300"
+            title="AI Chatbot Assistant"
+          >
+            <MessageSquare className="w-6 h-6 animate-pulse" />
+          </Link>
+        )}
       </main>
     </div>
   );

@@ -68,7 +68,7 @@ const Login = () => {
           Welcome Back
         </h2>
         <p className="mt-2 text-center text-sm text-slate-600">
-          Sign in to access the Fraud Investigation Platform
+          Sign in to access the Intelligent Healthcare Fraud Detection & Investigation Platform
         </p>
       </div>
 
