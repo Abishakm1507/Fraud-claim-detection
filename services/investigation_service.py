@@ -13,6 +13,7 @@ from agents.investigation.claim_agent import ClaimInvestigationAgent
 from agents.investigation.provider_agent import ProviderInvestigationAgent
 from crews.fraud_investigation_crew import FraudInvestigationCrew
 from services.agent_registry import AgentRegistry
+from services.ensemble_prediction_service import EnsemblePredictionService
 from services.investigation_orchestrator import InvestigationOrchestrator
 from utils.investigation_utils import create_probability_frame
 
@@ -29,9 +30,10 @@ class InvestigationService:
 
         self.model_dir = self.project_root / "models"
         self.provider_data_path = self.project_root / "notebooks" / "provider_master.csv"
-        self.model = joblib.load(self.model_dir / "logistic_regression.pkl")
-        self.scaler = joblib.load(self.model_dir / "scaler.pkl")
-        self.feature_names = joblib.load(self.model_dir / "feature_names.pkl")
+        self.ensemble_service = EnsemblePredictionService(model_dir=self.model_dir)
+        self.model = self.ensemble_service.models.get("logistic_regression")
+        self.scaler = self.ensemble_service.scaler
+        self.feature_names = self.ensemble_service.feature_names
         self.orchestrator = InvestigationOrchestrator()
         self.agent_registry = AgentRegistry()
         self.agent_registry.register("provider", lambda: ProviderInvestigationAgent())
@@ -55,7 +57,7 @@ class InvestigationService:
             features = self._build_feature_frame(row)
             scaled = self.scaler.transform(features)
             scaled_frame = pd.DataFrame(scaled, columns=self.feature_names)
-            probability = float(self.model.predict_proba(scaled_frame)[0][1])
+            probability = self.ensemble_service.predict_probability(scaled_frame)
             probabilities.append(probability)
 
         return create_probability_frame(provider_df, probabilities)

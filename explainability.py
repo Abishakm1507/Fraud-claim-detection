@@ -76,7 +76,11 @@ def configure_gemini() -> None:
         raise RuntimeError(
             "google.genai SDK does not expose Client. Ensure google-genai is installed correctly."
         )
-    logger.info("google.genai is available and will use Client(api_key=...) for requests")
+    # Log a masked preview of the key for debugging without exposing the secret.
+    masked = api_key[:6] + "..." if len(api_key) > 6 else "***"
+    logger.info(
+        "google.genai is available and will use Client(api_key=%s) for requests", masked
+    )
 
 
 def _load_json_file(path: str) -> Any:

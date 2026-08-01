@@ -18,11 +18,16 @@ from dotenv import load_dotenv
 import joblib
 import pandas as pd
 
+from services.ensemble_prediction_service import EnsemblePredictionService
 from services.explainability_service import ExplainabilityService
 from services.report_generation_service import ReportGenerationService
 
 # Import AI modules
-load_dotenv()
+# Use override=True so the project .env file takes precedence over any stale
+# system-level environment variables (e.g. an invalid GOOGLE_API_KEY set
+# globally). Without override=True, os.getenv() would return the system value
+# and the Gemini API call would fail with "API key not valid".
+load_dotenv(override=True)
 
 # ---------------------------------------------------------------------------
 # Gemini explainability module (always importable)
@@ -58,20 +63,23 @@ def rag_chat(message: str) -> str:
 
 app = FastAPI(title="Fraud Investigation Platform API")
 
-# Load ML assets
+# Load ML assets via the ensemble prediction service
 try:
     MODEL_DIR = PROJECT_ROOT / "models"
+    ensemble_service = EnsemblePredictionService(model_dir=MODEL_DIR)
 
-    model = joblib.load(MODEL_DIR / "logistic_regression.pkl")
-    scaler = joblib.load(MODEL_DIR / "scaler.pkl")
-    feature_names = joblib.load(MODEL_DIR / "feature_names.pkl")
+    model = ensemble_service.models.get("logistic_regression")
+    scaler = ensemble_service.scaler
+    feature_names = ensemble_service.feature_names
 
-    print("✅ Logistic Regression loaded")
+    print("✅ Ensemble Prediction Service loaded")
+    print(f"✅ Models loaded: {list(ensemble_service.models.keys())}")
     print("✅ Scaler loaded")
     print("✅ Feature names loaded")
 
 except Exception as e:
     print(f"❌ Model loading failed: {e}")
+    ensemble_service = None
     model = None
     scaler = None
     feature_names = []
@@ -93,6 +101,7 @@ explainability_service = ExplainabilityService(
     scaler=scaler,
     feature_names=feature_names,
     background_data=background_data,
+    ensemble_service=ensemble_service,
 )
 report_generation_service = ReportGenerationService()
 
@@ -129,26 +138,14 @@ class ChatRequest(BaseModel):
 def predict_fraud(request: PredictRequest):
 
     try:
-        # Create dataframe in correct feature order
-        input_data = []
+        # Preprocess features using the ensemble service
+        X_scaled = ensemble_service.preprocess(request.features)
 
-        for feature in feature_names:
-            input_data.append(request.features.get(feature, 0))
-
-        X = pd.DataFrame([input_data], columns=feature_names)
-
-        # Scale data
-        X_scaled = scaler.transform(X)
-
-        # Predict
-        probability = model.predict_proba(X_scaled)[0][1]
-        prediction = model.predict(X_scaled)[0]
-
-        risk_level = (
-            "High" if probability > 0.8
-            else "Medium" if probability > 0.5
-            else "Low"
-        )
+        # Predict using the ensemble
+        prediction_details = ensemble_service.predict_with_details(X_scaled)
+        probability = prediction_details["probability"]
+        prediction = prediction_details["prediction"]
+        risk_level = prediction_details["risk_level"]
 
         return {
             "provider_id": request.provider_id,
@@ -182,14 +179,11 @@ def explain_fraud(provider_id: str):
 
         X_scaled = scaler.transform(X_input)
 
-        probability = float(model.predict_proba(X_scaled)[0][1])
-        prediction = int(model.predict(X_scaled)[0])
-
-        risk_level = (
-            "High" if probability > 0.8
-            else "Medium" if probability > 0.5
-            else "Low"
-        )
+        # Predict using the ensemble
+        prediction_details = ensemble_service.predict_with_details(X_scaled)
+        probability = prediction_details["probability"]
+        prediction = prediction_details["prediction"]
+        risk_level = prediction_details["risk_level"]
 
         # ------------------------------------------------------------------
         # Real SHAP computation
@@ -245,19 +239,25 @@ def explain_fraud(provider_id: str):
                     max_output_tokens=800
                 )
             except Exception as exc:
+                # Do NOT suppress the exception. Log the complete exception
+                # (type + traceback + provider id) so the root cause is
+                # debuggable instead of being masked by a generic message.
                 explanation_fallback = True
                 explanation_error = str(exc)
                 report_text = (
-                    "The Explainability service is temporarily unavailable. "
-                    "A grounded report was generated from the available structured inputs."
+                    f"AI explanation could not be generated because: {exc}"
                 )
-                logger.warning("Explainability generation failed for %s: %s", provider_id, exc)
+                logger.exception(
+                    "Explainability generation failed for provider %s",
+                    provider_id,
+                    exc_info=True,
+                )
         else:
             explanation_fallback = True
             explanation_error = "Explainability module is not available."
             report_text = (
-                "The Explainability service is temporarily unavailable. "
-                "A grounded report was generated from the available structured inputs."
+                "AI explanation could not be generated because: "
+                "Explainability module is not available."
             )
 
         # ------------------------------------------------------------------

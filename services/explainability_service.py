@@ -42,14 +42,17 @@ class ExplainabilityService:
         scaler: Any = None,
         feature_names: list[str] | None = None,
         background_data: Any = None,
+        ensemble_service: Any = None,
     ) -> None:
         self._logger = logger
         self._model = model
         self._scaler = scaler
         self._feature_names = feature_names or []
         self._background_data = background_data
+        self._ensemble_service = ensemble_service
         self._explainer = None
         self._explainer_initialized = False
+        self._explainer_type = "linear"
 
     # ------------------------------------------------------------------
     # SHAP explainer initialization
@@ -71,6 +74,26 @@ class ExplainabilityService:
             self._logger.warning("Model or scaler is missing; cannot initialize SHAP explainer.")
             return False
 
+        # Prefer XGBoost with TreeExplainer for better explainability.
+        xgb_model = None
+        if self._ensemble_service is not None:
+            xgb_model = self._ensemble_service.models.get("xgboost")
+
+        if xgb_model is not None:
+            try:
+                self._explainer = shap.TreeExplainer(xgb_model)
+                self._explainer_initialized = True
+                self._explainer_type = "tree"
+                self._logger.info("SHAP TreeExplainer initialized for XGBoost.")
+                return True
+            except Exception as exc:
+                self._logger.warning(
+                    "Failed to initialize SHAP TreeExplainer for XGBoost: %s; "
+                    "falling back to LinearExplainer.",
+                    exc,
+                )
+
+        # Fallback: LinearExplainer for LogisticRegression.
         try:
             # For LogisticRegression, LinearExplainer uses the model coefficients.
             # It requires a masker (Independent, Partition, or Impute).
@@ -87,6 +110,7 @@ class ExplainabilityService:
                     ),
                 )
             self._explainer_initialized = True
+            self._explainer_type = "linear"
             self._logger.info("SHAP LinearExplainer initialized successfully.")
             return True
         except Exception as exc:
